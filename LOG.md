@@ -161,3 +161,234 @@ The unit of analysis matters. A FAERS row is not necessarily a unique adverse-ev
 
 ### Next step
 Calculate the total number of deduplicated Primary Suspect reports for semaglutide and tirzepatide separately. This will provide the denominator needed to understand why raw reaction counts alone cannot be interpreted as comparative risk and will prepare the data for later disproportionality analysis (ROR).
+
+## 2026-09-29 — Final Analysis and Project Deliverables
+
+### Clinical Outcome Analysis
+
+Defined four pre-specified clinical outcome groups for the primary semaglutide vs. tirzepatide comparison:
+
+1. **Common GI symptoms**
+   - Nausea
+   - Vomiting
+   - Diarrhoea
+   - Constipation
+
+2. **Pancreatitis**
+   - Pancreatitis
+   - Pancreatitis acute
+
+3. **Gallbladder events**
+   - Cholelithiasis
+   - Cholecystitis
+   - Cholecystitis acute
+
+4. **GI motility / obstruction**
+   - Impaired gastric emptying
+   - Ileus
+   - Intestinal obstruction
+
+Initially considered `Gastroparesis`, but the general Preferred Term was not present in the four-quarter REAC data. Only `Diabetic gastroparesis` and `Gastroparesis postoperative` were found, so these were not substituted into the predefined group.
+
+Created:
+
+```text
+sql/14_check_clinical_outcomes.sql
+sql/15_clinical_group_ror.sql
+scripts/calculate_group_ci.py
+```
+
+### Clinical Group ROR Results
+
+Constructed 2 × 2 contingency tables using deduplicated latest-version FAERS cases and Primary Suspect (`PS`) reports.
+
+Final results:
+
+| Outcome Group | Semaglutide ROR (95% CI) | Tirzepatide ROR (95% CI) |
+|---|---:|---:|
+| Common GI symptoms | 3.45 (3.36–3.54) | 3.12 (3.06–3.18) |
+| GI motility / obstruction | 18.65 (17.80–19.54) | 2.84 (2.67–3.03) |
+| Gallbladder events | 5.82 (5.27–6.42) | 3.72 (3.40–4.07) |
+| Pancreatitis | 5.17 (4.74–5.64) | 3.46 (3.20–3.74) |
+
+Saved final group-level results to:
+
+```text
+data/clinical_group_ror.csv
+```
+
+Important interpretation decision:
+
+- ROR is treated as a measure of **reporting disproportionality**.
+- ROR is not interpreted as incidence, relative risk, or causality.
+- Numerical differences between the two drug-specific RORs are treated as differences in reporting profiles, not direct head-to-head risk estimates.
+
+### Known-Signal Validation
+
+The individual Preferred Term pipeline successfully recovered known gastrointestinal reporting signals.
+
+Selected results:
+
+| Drug | Reaction | ROR | 95% CI |
+|---|---|---:|---:|
+| Semaglutide | Nausea | 3.96 | 3.84–4.09 |
+| Tirzepatide | Nausea | 3.51 | 3.43–3.60 |
+| Semaglutide | Constipation | 5.57 | 5.33–5.82 |
+| Tirzepatide | Constipation | 4.20 | 4.05–4.36 |
+
+This was used as a sanity check for the FAERS processing and disproportionality-analysis pipeline.
+
+### Demographic Analysis
+
+Created:
+
+```text
+sql/12_demographics.sql
+scripts/visualize_demographics.py
+```
+
+Sex distributions were calculated after deduplication and Primary Suspect filtering.
+
+Age analysis was restricted to:
+
+```sql
+age_cod = 'YR'
+AND age IS NOT NULL
+```
+
+Age groups:
+
+```text
+<18
+18-34
+35-49
+50-64
+65+
+```
+
+Among reports with valid age recorded in years:
+
+| Age Group | Semaglutide | Tirzepatide |
+|---|---:|---:|
+| <18 | 0.6% | 0.1% |
+| 18-34 | 6.5% | 7.7% |
+| 35-49 | 18.2% | 21.6% |
+| 50-64 | 34.9% | 36.6% |
+| 65+ | 39.8% | 34.1% |
+
+Decision: demographic distributions are interpreted as characteristics of submitted FAERS reports, not estimates of age- or sex-specific adverse-event risk.
+
+### Quarterly Trend Analysis
+
+Created:
+
+```text
+sql/13_quarterly_trend.sql
+scripts/visualize_quarterly_trend.py
+```
+
+Quarterly Primary Suspect report counts after latest-case-version deduplication:
+
+| Quarter | Semaglutide | Tirzepatide |
+|---|---:|---:|
+| 2025 Q3 | 13,553 | 16,411 |
+| 2025 Q4 | 3,052 | 16,238 |
+| 2026 Q1 | 3,312 | 18,390 |
+| 2026 Q2 | 15,749 | 18,998 |
+
+Sanity checks:
+
+```text
+Semaglutide total = 35,666
+Tirzepatide total = 70,037
+```
+
+These exactly matched the previously calculated deduplicated Primary Suspect report totals.
+
+Important limitation: quarter is based on the file containing the retained latest case version. It should therefore be interpreted as a latest-version reporting pattern, not an adverse-event incidence trend.
+
+### Final Visualizations
+
+Completed three final figures:
+
+```text
+figures/glp1_ror_comparison.png
+figures/quarterly_reporting_trend.png
+figures/age_distribution.png
+```
+
+Figure 1:
+- Individual adverse-event ROR comparison
+- 95% confidence intervals
+- Log-scaled ROR axis
+- ROR = 1 reference line
+
+Figure 2:
+- Quarterly Primary Suspect FAERS report counts
+- Semaglutide vs. tirzepatide
+
+Figure 3:
+- Age-group distribution
+- Percentages rather than raw counts
+- Restricted to reports with age recorded in years
+
+Decision: stop at three figures rather than adding additional visualizations without a clear analytical purpose.
+
+### Documentation
+
+Expanded `README.md` to include:
+
+- Research question
+- Key findings
+- Visualizations
+- FAERS data structure
+- Multi-quarter processing
+- Case-version deduplication
+- Primary Suspect filtering
+- Clinical outcome definitions
+- ROR methodology
+- 95% confidence intervals
+- Descriptive analysis
+- Limitations
+- Project structure
+- Reproduction instructions
+- Tech stack
+
+Created:
+
+```text
+SUMMARY.md
+```
+
+The summary provides a one-page nontechnical explanation of the research question, findings, interpretation, and limitations.
+
+### Final Project Status
+
+Analysis:
+
+- [x] Four FAERS quarters loaded
+- [x] Latest case versions retained
+- [x] Semaglutide and tirzepatide Primary Suspect reports identified
+- [x] High-frequency adverse events explored
+- [x] Age and sex distributions analyzed
+- [x] Quarterly reporting patterns analyzed
+- [x] Known GI signals validated
+- [x] Four pre-specified clinical outcome groups analyzed
+- [x] ROR calculated
+- [x] 95% confidence intervals calculated
+
+Deliverables:
+
+- [x] README
+- [x] Three final figures
+- [x] One-page nontechnical summary
+- [x] Analysis log
+
+### Key Lessons
+
+- Multi-quarter FAERS analysis requires case-version deduplication to avoid counting updated cases multiple times.
+- `primaryid` is used to join FAERS tables, while `caseid` and `caseversion` are needed to identify updated versions of the same case.
+- `COUNT(DISTINCT primaryid)` prevents multiple reactions or drug rows within a report from inflating report counts.
+- ROR measures reporting disproportionality rather than clinical risk.
+- Clinical outcomes should be defined before interpreting the final signal results rather than selected only because they have high RORs.
+- Data-quality issues such as missing demographics and inconsistent or highly specific MedDRA terms must be handled explicitly and documented.
