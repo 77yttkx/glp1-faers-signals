@@ -23,7 +23,7 @@ After deduplicating FAERS cases to retain the latest case version and restrictin
 - **35,666 semaglutide reports**
 - **70,037 tirzepatide reports**
 
-### Pre-specified Clinical Outcome Groups
+### Clinically Defined Outcome Groups
 
 Four clinically relevant adverse-event groups were defined before the final comparison:
 
@@ -108,6 +108,7 @@ read_csv(
     delim='$',
     header=true
 )
+```
 
 ### 2. Case-Version Deduplication
 
