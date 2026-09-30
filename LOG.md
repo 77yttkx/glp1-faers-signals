@@ -1,123 +1,93 @@
 # Project Log
 
-## 2026-09-23
+This log records the major analytical decisions, validation checks, and methodological changes made during the FAERS project. Routine syntax debugging and local IDE setup details are intentionally omitted.
 
-### Tried
-- Created the `glp1-faers-signals` project structure with folders for raw data, SQL, and notebooks.
-- Set up a Python virtual environment (`.venv`) in PyCharm.
-- Installed and tested DuckDB.
-- Loaded the 2026 Q2 FAERS `DEMO26Q2.txt` file with DuckDB.
-- Verified that the FAERS ASCII file uses `$` as the delimiter and that the header row is read correctly.
-- Counted the total number of rows and compared total rows, unique `primaryid`, and unique `caseid`.
-- Queried duplicate `caseid` values and inspected one case with multiple versions.
+## 2026-09-23 — Project Setup and Initial Data Inspection
 
-### Problems
-- The project initially contained both the extracted FDA folder and the cleaned `data/raw/2026Q2/` folder, which could create confusion about file paths.
-- The README first opened in Markdown preview mode in PyCharm, so it was not directly editable.
+### Data Setup
 
-### Findings
-- `DEMO26Q2.txt` contains 422,459 rows.
-- All 422,459 `primaryid` values are unique.
-- There are 422,458 unique `caseid` values, meaning one case appears twice in this quarter.
-- The duplicated case had:
-  - `caseid = 26012757`
-  - `caseversion = 6` with `primaryid = 260127576`
-  - `caseversion = 7` with `primaryid = 260127577`
+- Created the `glp1-faers-signals` project structure for raw data, SQL, scripts, and documentation.
+- Set up Python, DuckDB, and the initial 2026 Q2 FAERS data.
+- Verified that the FAERS ASCII files use `$` as the delimiter.
+- Inspected report identifiers and case-version structure in `DEMO26Q2.txt`.
 
-### Decisions
-- Raw FAERS data will stay inside the local `data/` folder and will not be committed to GitHub.
-- DuckDB will be used to query FAERS files directly with SQL.
-- `caseid` will be treated as the identifier for the underlying case, while `primaryid` identifies a specific report version.
-- During deduplication, only the row with the highest `caseversion` for each `caseid` will be kept.
-- For now, analysis will stay limited to one quarter before combining multiple quarters.
+### Initial Findings
 
-## 2026-09-26 — Week 1: Exploring FAERS Data and Organizing SQL Workflow
+`DEMO26Q2.txt` contained:
 
-### What I did
+- 422,459 rows
+- 422,459 unique `primaryid` values
+- 422,458 unique `caseid` values
 
-- Loaded and explored the 2026 Q2 FAERS ASCII files using DuckDB.
-- Inspected the structure and columns of the DEMO, DRUG, and REAC datasets using `DESCRIBE` and sample rows.
-- Learned the roles of important FAERS fields:
-  - `primaryid`: unique identifier for a specific report/version.
-  - `caseid`: identifier for the underlying adverse-event case.
-  - `caseversion`: version number of a case.
-  - `prod_ai`: active ingredient of the reported drug.
-  - `role_cod`: role of the drug in the report; `PS` means Primary Suspect.
-  - `pt`: Preferred Term describing the reported adverse event.
-- Counted unique primary-suspect reports by active ingredient using:
-  - `COUNT(DISTINCT primaryid)`
-  - `WHERE`
-  - `GROUP BY`
-  - `ORDER BY`
-- Confirmed that tirzepatide and semaglutide appear among the most frequently reported primary-suspect active ingredients in 2026 Q2.
-- Counted the most frequently reported adverse-event terms in the REAC table.
-- Reorganized the project so reusable SQL queries are stored separately from Python:
-  - `sql/01_top_drugs.sql`
-  - `sql/02_top_reactions.sql`
-  - `scripts/explore_data.py`
-- Used Python to read a `.sql` file and execute the query through DuckDB.
+One case appeared in two versions:
 
-### What broke / what I debugged
+| caseid | caseversion | primaryid |
+|---|---:|---:|
+| 26012757 | 6 | 260127576 |
+| 26012757 | 7 | 260127577 |
 
-- Initially counted rows with `COUNT(*)`, then realized that one FAERS report can contain multiple drug rows. Changed the query to `COUNT(DISTINCT primaryid)` to count reports rather than rows.
-- Initially included records where `prod_ai` was NULL. Added `WHERE prod_ai IS NOT NULL`.
-- Added `role_cod = 'PS'` so the drug analysis focuses on primary-suspect drugs instead of concomitant or secondary-suspect drugs.
-- Encountered SQL syntax errors from putting conditions in the wrong clause and using `LIMIT=10` instead of `LIMIT 10`.
-- After moving Python files into `scripts/` and SQL queries into `sql/`, relative file paths stopped working.
-- Learned that relative paths are resolved from Python's current working directory, not automatically from the location of the Python script.
-- Fixed the PyCharm run configuration so the working directory points to the project root:
-  `/Users/shuyuqi/Documents/glp1-faers-signals`
+This confirmed that `caseid` identifies the underlying case, while `primaryid` identifies a specific report version.
 
-### Decisions and why
+### Methodological Decisions
 
-- Use `prod_ai` rather than `drugname` as the main drug identifier because active ingredients are more standardized than reported product names.
-- Restrict the main drug analysis to `role_cod = 'PS'` because the project focuses on drugs identified as the primary suspect in adverse-event reports.
-- Use `COUNT(DISTINCT primaryid)` when counting reports to avoid overcounting reports that contain multiple rows.
-- Keep SQL queries in `.sql` files and use Python mainly to execute queries and later perform statistical analysis/visualization.
-- Keep the project working directory at the repository root so paths such as `sql/...` and `data/...` remain consistent.
+- Keep raw FAERS data local and exclude it from GitHub.
+- Use DuckDB to query the FAERS ASCII files directly.
+- Use `primaryid` to join FAERS tables.
+- Use `caseid` and `caseversion` to identify updated versions of the same case.
+- Retain the highest available `caseversion` for each `caseid` during multi-quarter deduplication.
 
-### What I learned
+---
 
-The main lesson today was that understanding the unit of observation matters before aggregating data. A row in the DRUG table is not necessarily one adverse-event report, so `COUNT(*)` and `COUNT(DISTINCT primaryid)` answer different questions.
+## 2026-09-26 — Initial FAERS Exploration
 
-I also learned that project structure affects code execution: moving files into folders can break relative paths even when the files still exist. Understanding the working directory makes the project easier to organize and debug.
+### Data Exploration
 
-### Next step
+- Inspected the DEMO, DRUG, and REAC tables and their key fields.
+- Identified `prod_ai` as the primary drug identifier and `pt` as the MedDRA Preferred Term for reported reactions.
+- Counted unique Primary Suspect reports by active ingredient.
+- Examined the most frequently reported adverse-event terms.
+- Separated reusable SQL queries from Python execution scripts.
 
-Finish Week 1 by making sure I can independently answer three basic questions for one FAERS quarter:
+### Methodological Decisions
 
-1. How many reports are in the quarter?
-2. What are the most frequently reported primary-suspect active ingredients?
-3. What are the most frequently reported adverse-event terms?
+- Use `prod_ai` instead of free-text `drugname` because active ingredient names are more standardized.
+- Restrict the main drug analysis to `role_cod = 'PS'` so the analysis focuses on drugs identified as the Primary Suspect.
+- Use `COUNT(DISTINCT primaryid)` when counting reports to avoid inflation from one-to-many DRUG or REAC rows.
+- Keep SQL analysis in `.sql` files and use Python for execution, statistical calculations, and visualization.
 
-Then move to Week 2: join DRUG and REAC using `primaryid` and isolate reports involving semaglutide or tirzepatide.
+### Key Analytical Lesson
 
-## 2026-09-26 — Multi-Quarter Loading & FAERS Case Deduplication
+The unit of observation must be defined before aggregation. A row in the DRUG or REAC table is not necessarily a unique adverse-event report, so raw row counts can overstate report counts after joins.
 
-### What I did
-- Expanded the FAERS analysis from one quarter (2026 Q2) to four quarters:
-  - 2025 Q3
-  - 2025 Q4
-  - 2026 Q1
-  - 2026 Q2
-- Used DuckDB wildcard paths (`data/raw/*/DRUG*.txt`) to read multiple quarterly files at once.
-- Used `filename=true` to verify that all four DRUG and REAC quarterly files were loaded.
-- Joined multi-quarter DRUG and REAC data using `primaryid`.
-- Generated reaction counts for semaglutide and tirzepatide using:
-  - `role_cod = 'PS'`
-  - `prod_ai`
-  - `COUNT(DISTINCT primaryid)`
-- Used `RANK() OVER (PARTITION BY prod_ai ORDER BY report_count DESC)` to rank reactions separately for each drug.
-- Investigated duplicate FAERS case versions using DEMO data.
-- Confirmed that one `caseid` can have multiple `caseversion` values and different `primaryid` values.
-- Built a deduplication workflow using `RANK()` to keep only the latest `caseversion` for each `caseid`.
-- Joined the deduplicated `primaryid` list back to DRUG and REAC.
-- Recalculated adverse-event counts after deduplication.
+---
 
-### Key result
-Deduplication reduced several reaction counts, confirming that using all quarterly records without case-version filtering can double-count updated cases.
+## 2026-09-26 — Multi-Quarter Processing and Case Deduplication
 
-Examples:
+### Multi-Quarter Expansion
+
+Expanded the analysis from 2026 Q2 to four consecutive FAERS quarters:
+
+- 2025 Q3
+- 2025 Q4
+- 2026 Q1
+- 2026 Q2
+
+Used DuckDB wildcard reads to query quarterly files together and verified that all four DRUG and REAC files were included.
+
+### Deduplication
+
+Investigated repeated `caseid` values across quarters and confirmed that a case can have multiple `caseversion` values with different `primaryid` values.
+
+Built a latest-version workflow that:
+
+1. Ranks versions within each `caseid` by descending `caseversion`.
+2. Retains the latest available version.
+3. Joins the retained `primaryid` values to DRUG and REAC.
+4. Recalculates adverse-event counts using the deduplicated case set.
+
+### Deduplication Validation
+
+Several reaction counts decreased after deduplication:
 
 | Drug | Reaction | Before Dedup | After Dedup |
 |---|---|---:|---:|
@@ -128,67 +98,33 @@ Examples:
 | Tirzepatide | Diarrhoea | 5,452 | 5,177 |
 | Tirzepatide | Vomiting | 4,708 | 4,316 |
 
-### SQL concepts practiced
-- Multi-file wildcard reads
-- `filename=true`
-- `HAVING`
-- `MAX()`
-- Common Table Expressions (`WITH ... AS`)
-- Multiple CTEs
-- `RANK() OVER (...)`
-- `PARTITION BY`
-- Multi-table `JOIN`
-- `COUNT(DISTINCT ...)`
-- `GROUP BY`
-- Deduplication by latest record
+This confirmed that combining quarterly files without case-version filtering can double-count updated cases.
 
-### Problems / debugging
-- Used `headers=true` instead of `header=true` in `read_csv()`.
-- Had extra/misplaced parentheses when chaining multiple CTEs.
-- Initially tried to define a CTE inside `GROUP BY`.
-- Learned that CTEs must be defined in the `WITH` section before the final query.
-- Learned that `RANK()` uses `RANK() OVER (...) AS name`, not `RANK() AS (...)`.
+### Final Deduplicated Primary-Suspect Report Counts
 
-### Decisions and why
-- Use four consecutive quarters instead of one quarter to create a more meaningful analysis window.
-- Use `prod_ai` instead of free-text `drugname` to identify semaglutide and tirzepatide consistently.
-- Restrict drugs to `role_cod = 'PS'` (Primary Suspect).
-- Deduplicate FAERS cases before final analysis by keeping the highest `caseversion` for each `caseid`.
-- Continue counting unique `primaryid` values rather than raw rows because one report can contain multiple drug/reaction rows.
+- **Semaglutide: 35,666**
+- **Tirzepatide: 70,037**
 
-### Main lesson
-The unit of analysis matters. A FAERS row is not necessarily a unique adverse-event case. The same case can be updated across quarters, so multi-quarter analysis requires case-version deduplication before interpreting report counts.
+### Methodological Decisions
 
-### Next step
-Calculate the total number of deduplicated Primary Suspect reports for semaglutide and tirzepatide separately. This will provide the denominator needed to understand why raw reaction counts alone cannot be interpreted as comparative risk and will prepare the data for later disproportionality analysis (ROR).
+- Deduplicate cases before the final multi-quarter analysis.
+- Continue counting distinct `primaryid` values after joins.
+- Treat report counts as FAERS reporting counts, not patient exposure or adverse-event incidence.
+
+---
 
 ## 2026-09-29 — Final Analysis and Project Deliverables
 
-### Clinical Outcome Analysis
+### Pre-Specified Clinical Outcome Groups
 
-Defined four pre-specified clinical outcome groups for the primary semaglutide vs. tirzepatide comparison:
+Defined four clinically relevant outcome groups for the primary semaglutide vs. tirzepatide comparison:
 
-1. **Common GI symptoms**
-   - Nausea
-   - Vomiting
-   - Diarrhoea
-   - Constipation
+1. **Common GI symptoms:** Nausea, Vomiting, Diarrhoea, Constipation
+2. **Pancreatitis:** Pancreatitis, Pancreatitis acute
+3. **Gallbladder events:** Cholelithiasis, Cholecystitis, Cholecystitis acute
+4. **GI motility / obstruction:** Impaired gastric emptying, Ileus, Intestinal obstruction
 
-2. **Pancreatitis**
-   - Pancreatitis
-   - Pancreatitis acute
-
-3. **Gallbladder events**
-   - Cholelithiasis
-   - Cholecystitis
-   - Cholecystitis acute
-
-4. **GI motility / obstruction**
-   - Impaired gastric emptying
-   - Ileus
-   - Intestinal obstruction
-
-Initially considered `Gastroparesis`, but the general Preferred Term was not present in the four-quarter REAC data. Only `Diabetic gastroparesis` and `Gastroparesis postoperative` were found, so these were not substituted into the predefined group.
+`Gastroparesis` was initially considered for the motility group. The general Preferred Term was not present in the analyzed REAC data; only `Diabetic gastroparesis` and `Gastroparesis postoperative` were observed. These more specific terms were not substituted into the predefined group.
 
 Created:
 
@@ -198,11 +134,9 @@ sql/15_clinical_group_ror.sql
 scripts/calculate_group_ci.py
 ```
 
-### Clinical Group ROR Results
+### Clinical Group ROR Analysis
 
-Constructed 2 × 2 contingency tables using deduplicated latest-version FAERS cases and Primary Suspect (`PS`) reports.
-
-Final results:
+Constructed 2 × 2 contingency tables from deduplicated FAERS reports and calculated Reporting Odds Ratios (RORs) with 95% confidence intervals.
 
 | Outcome Group | Semaglutide ROR (95% CI) | Tirzepatide ROR (95% CI) |
 |---|---:|---:|
@@ -211,23 +145,17 @@ Final results:
 | Gallbladder events | 5.82 (5.27–6.42) | 3.72 (3.40–4.07) |
 | Pancreatitis | 5.17 (4.74–5.64) | 3.46 (3.20–3.74) |
 
-Saved final group-level results to:
+Saved the group-level results to `data/clinical_group_ror.csv`.
 
-```text
-data/clinical_group_ror.csv
-```
+### Interpretation Decision
 
-Important interpretation decision:
-
-- ROR is treated as a measure of **reporting disproportionality**.
-- ROR is not interpreted as incidence, relative risk, or causality.
-- Numerical differences between the two drug-specific RORs are treated as differences in reporting profiles, not direct head-to-head risk estimates.
+- Treat ROR as a measure of **reporting disproportionality**.
+- Do not interpret ROR as incidence, relative risk, or causality.
+- Treat numerical differences between semaglutide and tirzepatide RORs as differences in reporting profiles rather than direct head-to-head risk estimates.
 
 ### Known-Signal Validation
 
-The individual Preferred Term pipeline successfully recovered known gastrointestinal reporting signals.
-
-Selected results:
+Used common gastrointestinal reactions as a validation check for the processing and disproportionality pipeline.
 
 | Drug | Reaction | ROR | 95% CI |
 |---|---|---:|---:|
@@ -236,34 +164,17 @@ Selected results:
 | Semaglutide | Constipation | 5.57 | 5.33–5.82 |
 | Tirzepatide | Constipation | 4.20 | 4.05–4.36 |
 
-This was used as a sanity check for the FAERS processing and disproportionality-analysis pipeline.
+The pipeline recovered elevated reporting signals for known gastrointestinal adverse events, providing a sanity check before interpreting broader comparisons.
 
 ### Demographic Analysis
 
-Created:
+Created `sql/12_demographics.sql` and `scripts/visualize_demographics.py`.
 
-```text
-sql/12_demographics.sql
-scripts/visualize_demographics.py
-```
-
-Sex distributions were calculated after deduplication and Primary Suspect filtering.
-
-Age analysis was restricted to:
+Age analysis was restricted to reports satisfying:
 
 ```sql
 age_cod = 'YR'
 AND age IS NOT NULL
-```
-
-Age groups:
-
-```text
-<18
-18-34
-35-49
-50-64
-65+
 ```
 
 Among reports with valid age recorded in years:
@@ -276,18 +187,11 @@ Among reports with valid age recorded in years:
 | 50-64 | 34.9% | 36.6% |
 | 65+ | 39.8% | 34.1% |
 
-Decision: demographic distributions are interpreted as characteristics of submitted FAERS reports, not estimates of age- or sex-specific adverse-event risk.
+Demographic distributions are interpreted as characteristics of submitted FAERS reports, not estimates of age- or sex-specific adverse-event risk.
 
-### Quarterly Trend Analysis
+### Quarterly Reporting Analysis
 
-Created:
-
-```text
-sql/13_quarterly_trend.sql
-scripts/visualize_quarterly_trend.py
-```
-
-Quarterly Primary Suspect report counts after latest-case-version deduplication:
+Created `sql/13_quarterly_trend.sql` and `scripts/visualize_quarterly_trend.py`.
 
 | Quarter | Semaglutide | Tirzepatide |
 |---|---:|---:|
@@ -296,20 +200,13 @@ Quarterly Primary Suspect report counts after latest-case-version deduplication:
 | 2026 Q1 | 3,312 | 18,390 |
 | 2026 Q2 | 15,749 | 18,998 |
 
-Sanity checks:
+The quarterly totals sum to the final deduplicated Primary Suspect report counts.
 
-```text
-Semaglutide total = 35,666
-Tirzepatide total = 70,037
-```
-
-These exactly matched the previously calculated deduplicated Primary Suspect report totals.
-
-Important limitation: quarter is based on the file containing the retained latest case version. It should therefore be interpreted as a latest-version reporting pattern, not an adverse-event incidence trend.
+Because quarter assignment reflects the file containing the retained latest case version, these values describe latest-version reporting patterns rather than event incidence or necessarily the quarter of initial reporting.
 
 ### Final Visualizations
 
-Completed three final figures:
+Completed three portfolio figures:
 
 ```text
 figures/glp1_ror_comparison.png
@@ -317,78 +214,57 @@ figures/quarterly_reporting_trend.png
 figures/age_distribution.png
 ```
 
-Figure 1:
-- Individual adverse-event ROR comparison
-- 95% confidence intervals
-- Log-scaled ROR axis
-- ROR = 1 reference line
+The figures cover individual adverse-event RORs and confidence intervals, quarterly reporting patterns, and age distributions.
 
-Figure 2:
-- Quarterly Primary Suspect FAERS report counts
-- Semaglutide vs. tirzepatide
-
-Figure 3:
-- Age-group distribution
-- Percentages rather than raw counts
-- Restricted to reports with age recorded in years
-
-Decision: stop at three figures rather than adding additional visualizations without a clear analytical purpose.
+The project was intentionally limited to three final figures rather than adding visualizations without a distinct analytical purpose.
 
 ### Documentation
 
-Expanded `README.md` to include:
+Completed documentation covering:
 
-- Research question
-- Key findings
-- Visualizations
-- FAERS data structure
-- Multi-quarter processing
-- Case-version deduplication
+- Research question and key findings
+- FAERS data and table structure
+- Multi-quarter processing and case-version deduplication
 - Primary Suspect filtering
 - Clinical outcome definitions
-- ROR methodology
-- 95% confidence intervals
+- ROR methodology and confidence intervals
 - Descriptive analysis
-- Limitations
-- Project structure
+- Interpretation limitations
 - Reproduction instructions
-- Tech stack
+- Project structure and technology stack
+- One-page nontechnical summary
 
-Created:
+---
 
-```text
-SUMMARY.md
-```
+## Key Methodological Decisions
 
-The summary provides a one-page nontechnical explanation of the research question, findings, interpretation, and limitations.
+- Use `primaryid` for joins across FAERS tables.
+- Use `caseid` and `caseversion` to identify and deduplicate updated cases.
+- Use `COUNT(DISTINCT primaryid)` after one-to-many joins.
+- Identify target drugs using standardized `prod_ai`.
+- Restrict target-drug analyses to Primary Suspect (`PS`) reports.
+- Define clinically relevant outcome groups before interpreting the final group-level comparison.
+- Treat ROR as reporting disproportionality rather than clinical risk.
+- Restrict age analysis to non-missing ages recorded in years.
+- Explicitly document missing data, reporting bias, and the limitations of spontaneous-report data.
 
-### Final Project Status
+## Final Project Status
 
-Analysis:
+### Analysis
 
 - [x] Four FAERS quarters loaded
 - [x] Latest case versions retained
 - [x] Semaglutide and tirzepatide Primary Suspect reports identified
 - [x] High-frequency adverse events explored
-- [x] Age and sex distributions analyzed
+- [x] Demographic distributions analyzed
 - [x] Quarterly reporting patterns analyzed
 - [x] Known GI signals validated
 - [x] Four pre-specified clinical outcome groups analyzed
-- [x] ROR calculated
-- [x] 95% confidence intervals calculated
+- [x] RORs and 95% confidence intervals calculated
 
-Deliverables:
+### Deliverables
 
 - [x] README
 - [x] Three final figures
 - [x] One-page nontechnical summary
-- [x] Analysis log
-
-### Key Lessons
-
-- Multi-quarter FAERS analysis requires case-version deduplication to avoid counting updated cases multiple times.
-- `primaryid` is used to join FAERS tables, while `caseid` and `caseversion` are needed to identify updated versions of the same case.
-- `COUNT(DISTINCT primaryid)` prevents multiple reactions or drug rows within a report from inflating report counts.
-- ROR measures reporting disproportionality rather than clinical risk.
-- Clinical outcomes should be defined before interpreting the final signal results rather than selected only because they have high RORs.
-- Data-quality issues such as missing demographics and inconsistent or highly specific MedDRA terms must be handled explicitly and documented.
+- [x] Analysis decision log
